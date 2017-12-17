@@ -127,8 +127,8 @@ def runModelWithEmbed():
     train_no = 18000
     train_q1 = np.asarray(train_q1)
 
-    train_question1 = train_q1[0:300]
-    train_labels = labels[0:300]
+    train_question1 = train_q1[0:]
+    train_labels = labels[0:]
 
     validate_question1 = train_q1[train_no:]
     validate_labels = labels[train_no:]
@@ -151,5 +151,22 @@ def runModelWithEmbed():
     pickle.dump(predictions, open("result.pkl", "wb"))
     #generateResult()
 
+def generateResult():
+    result = pickle.load(open("result.pkl", "rb"))
+    print(len(result))
+    print(np.asarray(result).shape)
 
-runModelWithEmbed()
+    train_data, test_data, labels, embedding_matrix = prepareTrainData()
+    test_ids = test_data[0]
+
+    with open("predicted.csv", "a+") as op_file:
+        op_file.write("id,EAP,HPL,MWS"+"\n")
+        for i,id in enumerate(test_ids):
+            num1 = '{:06.4f}'.format(result[i][0])
+            num2 = '{:06.4f}'.format(result[i][1])
+            num3 = '{:06.4f}'.format(result[i][2])
+            op_file.write(id+","+str(num1)+","+str(num2)+","+str(num3)+"\n")
+
+
+#runModelWithEmbed()
+generateResult()
