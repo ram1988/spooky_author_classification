@@ -21,7 +21,7 @@ class LSTMNet:
         self.embedding_matrix = embedding_matrix
         self.vocab_size = vocab_size
         self.threshold = 0.7
-        self.learning_rate = 0.05
+        self.learning_rate = 0.1
         self.epsilon = 1e-3
         self.istraining = True
 
@@ -248,8 +248,8 @@ class LSTMNet:
                 print(len(batch_x1))
                 predictions = sess.run([self.pred], feed_dict={self.x1: batch_x1})
                 # Compute Accuracy
-                batch_log_loss = tf.losses.log_loss(predictions, batch_ys)
-                print("Log Loss:", batch_log_loss)
+                batch_log_loss = tf.losses.log_loss(predictions[0], batch_ys)
+                print("Log Loss:", batch_log_loss.eval())
 
 
     def evaluateResults(self, predictions, actual):
