@@ -14,14 +14,14 @@ class LSTMNet:
         self.nfeatures = nfeatures
         self.n_hidden = nfeatures / 2
         self.n_steps = max_length
-        self.n_layers = 2
+        self.n_layers = 1
         self.batch_size = 200
         self.dropout = 0.75
         self.max_length = max_length
         self.embedding_matrix = embedding_matrix
         self.vocab_size = vocab_size
         self.threshold = 0.7
-        self.learning_rate = 0.1
+        self.learning_rate = 0.05
         self.epsilon = 1e-3
 
     def __createBatch(self, input1=None, labels=None, batch_size=None):
@@ -86,11 +86,14 @@ class LSTMNet:
     def buildRNN(self, x, scope):
         print(x)
         x = tf.transpose(x, [1, 0, 2])
+        '''
+        x = tf.transpose(x, [1, 0, 2])
         # print(x)
         x = tf.reshape(x, [-1, self.nfeatures])
         # print(x)
         x = tf.split(x, self.n_steps, 0)
         print(x)
+        '''
 
         with tf.name_scope("fw" + scope), tf.variable_scope("fw" + scope):
             fw_cell_array = []
@@ -109,13 +112,22 @@ class LSTMNet:
                 bw_cell_array.append(bw_cell)
             bw_cell = rnn.MultiRNNCell(bw_cell_array, state_is_tuple=True)
 
-        outputs, _, _ = tf.contrib.rnn.static_bidirectional_rnn(fw_cell, bw_cell, x, dtype=tf.float64)
-        # outputs, = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, x, dtype=tf.float64)
+        #outputs, _, _ = tf.contrib.rnn.static_bidirectional_rnn(fw_cell, bw_cell, x, dtype=tf.float64)
+        #print("output-->" + str(outputs))
+        #print("output-->" + str(outputs[-1]))
 
+
+        outputs = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, x, dtype=tf.float64, time_major=True)
+        print("output-->" + str(outputs))
+        outputs = tf.concat(outputs[0], 2)
+        outputs = tf.reshape(outputs, [-1, self.nfeatures])
+        outputs = tf.split(outputs, self.n_steps, 0)
+        print("output-->"+str(outputs))
         outputs = outputs[-1]
 
-        print("output-->"+str(outputs))
+        result = tf.layers.dense(outputs,3,tf.nn.softmax)
 
+        '''
         weights = {
             'out': tf.Variable(tf.random_normal([self.nfeatures, 3], dtype=tf.float64),
                                dtype=tf.float64)
@@ -126,6 +138,7 @@ class LSTMNet:
 
         result = tf.matmul(outputs, weights['out']) + biases['out']
         result = tf.nn.softmax(result)
+        '''
         print("final result11-->"+str(result))
 
         # add softmax layer
@@ -133,7 +146,8 @@ class LSTMNet:
 
     def optimizeWeights(self, pred):
         #cost = tf.reduce_mean(-tf.reduce_sum(self.y * tf.log(pred), reduction_indices=1))
-        cost = tf.losses.mean_squared_error(self.y, pred)
+        print("predicted-->"+str(pred))
+        cost = tf.losses.log_loss(self.y, pred)
         global_step = tf.Variable(0, trainable=False)
         learning_rate = tf.train.exponential_decay(self.learning_rate, global_step,
                                                    1000, 0.5, staircase=False)
