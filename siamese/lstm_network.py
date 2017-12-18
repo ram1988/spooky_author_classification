@@ -16,7 +16,7 @@ class LSTMNet:
         self.n_steps = max_length
         self.n_layers = 1
         self.batch_size = 200
-        self.dropout = 0.75
+        self.dropout = 0.7
         self.max_length = max_length
         self.embedding_matrix = embedding_matrix
         self.vocab_size = vocab_size
@@ -129,10 +129,12 @@ class LSTMNet:
         outputs = outputs[-1]
         print("output-->" + str(outputs))
 
-        nn_layer = tf.layers.dense(outputs,self.nfeatures/2,activation=None)
-        batch_normalized = self.insertBatchNNLayer(nn_layer, [0], [self.nfeatures/2])
-        batch_normalized = tf.nn.relu(batch_normalized)
-        result = tf.layers.dense(batch_normalized, 3, activation=tf.nn.softmax)
+        nn_layer1 = tf.layers.dense(outputs,1024,activation=tf.nn.relu)
+        nn_layer1 = tf.nn.dropout(nn_layer1,keep_prob=0.2)
+        nn_layer2 = tf.layers.dense(nn_layer1, 1024, activation=tf.nn.relu)
+        nn_layer2 = tf.nn.dropout(nn_layer2, keep_prob=0.2)
+        result = tf.layers.dense(nn_layer2, 3, activation=tf.nn.softmax)
+
         print("final result11-->"+str(result))
 
         return result
@@ -246,11 +248,9 @@ class LSTMNet:
                 print(len(batch_x1))
                 predictions = sess.run([self.pred], feed_dict={self.x1: batch_x1})
                 # Compute Accuracy
-                batch_accuracy = self.evaluateResults(predictions, batch_ys)
-                overall_accuracy = overall_accuracy + batch_accuracy
-                print("Accuracy:", batch_accuracy)
-            overall_accuracy = overall_accuracy / total_batch
-            print("Overall Accuracy-->" + str(overall_accuracy))
+                batch_log_loss = tf.losses.log_loss(predictions, batch_ys)
+                print("Log Loss:", batch_log_loss)
+
 
     def evaluateResults(self, predictions, actual):
         print(predictions)
