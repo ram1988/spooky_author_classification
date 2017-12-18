@@ -23,6 +23,7 @@ class LSTMNet:
         self.threshold = 0.7
         self.learning_rate = 0.05
         self.epsilon = 1e-3
+        self.istraining = True
 
     def __createBatch(self, input1=None, labels=None, batch_size=None):
 
@@ -69,37 +70,43 @@ class LSTMNet:
         return one_hot_label
 
     def reshape(self, input1, labels=None):
-
         input1 = np.reshape(input1, (-1, self.max_length))
         labels = np.reshape(labels, (-1, 1))
 
         return input1, labels
 
     def insertBatchNNLayer(self, mat_rel, axes, dimension_size):
+        mean = None
+        var = None
         batch_mean, batch_var = tf.nn.moments(mat_rel, axes)
+        ema = tf.train.ExponentialMovingAverage(decay=0.5)
+
+        if self.istraining:
+            print("is training in BN")
+            mean = batch_mean
+            var = batch_var
+            ema_apply_op = ema.apply([batch_mean, batch_var])
+        else:
+            print("is testing in BN")
+            mean = ema.average(batch_mean)
+            var = ema.average(batch_var)
+
         scale2 = tf.Variable(tf.ones(dimension_size, dtype=tf.float64), dtype=tf.float64)
         beta2 = tf.Variable(tf.zeros(dimension_size, dtype=tf.float64), dtype=tf.float64)
-        bn_layer = tf.nn.batch_normalization(mat_rel, batch_mean, batch_var, beta2, scale2, self.epsilon)
+        bn_layer = tf.nn.batch_normalization(mat_rel, mean, var, beta2, scale2, self.epsilon)
 
         return bn_layer
 
     def buildRNN(self, x, scope):
         print(x)
         x = tf.transpose(x, [1, 0, 2])
-        '''
-        x = tf.transpose(x, [1, 0, 2])
-        # print(x)
-        x = tf.reshape(x, [-1, self.nfeatures])
-        # print(x)
-        x = tf.split(x, self.n_steps, 0)
-        print(x)
-        '''
+
 
         with tf.name_scope("fw" + scope), tf.variable_scope("fw" + scope):
             fw_cell_array = []
             print(tf.get_variable_scope().name)
             for _ in range(self.n_layers):
-                fw_cell = rnn.BasicLSTMCell(self.n_hidden, forget_bias=1.0, state_is_tuple=True, activation=tf.nn.relu)
+                fw_cell = rnn.GRUCell(self.n_hidden, activation=tf.nn.relu)
                 fw_cell = rnn.DropoutWrapper(fw_cell,input_keep_prob=self.dropout,output_keep_prob=self.dropout)
                 fw_cell_array.append(fw_cell)
             fw_cell = rnn.MultiRNNCell(fw_cell_array, state_is_tuple=True)
@@ -107,14 +114,10 @@ class LSTMNet:
             bw_cell_array = []
             print(tf.get_variable_scope().name)
             for _ in range(self.n_layers):
-                bw_cell = rnn.BasicLSTMCell(self.n_hidden, forget_bias=1.0, state_is_tuple=True, activation=tf.nn.relu)
+                bw_cell = rnn.GRUCell(self.n_hidden, activation=tf.nn.relu)
                 bw_cell = rnn.DropoutWrapper(bw_cell,input_keep_prob=self.dropout,output_keep_prob=self.dropout)
                 bw_cell_array.append(bw_cell)
             bw_cell = rnn.MultiRNNCell(bw_cell_array, state_is_tuple=True)
-
-        #outputs, _, _ = tf.contrib.rnn.static_bidirectional_rnn(fw_cell, bw_cell, x, dtype=tf.float64)
-        #print("output-->" + str(outputs))
-        #print("output-->" + str(outputs[-1]))
 
 
         outputs = tf.nn.bidirectional_dynamic_rnn(fw_cell, bw_cell, x, dtype=tf.float64, time_major=True)
@@ -124,24 +127,14 @@ class LSTMNet:
         outputs = tf.split(outputs, self.n_steps, 0)
         print("output-->"+str(outputs))
         outputs = outputs[-1]
+        print("output-->" + str(outputs))
 
-        result = tf.layers.dense(outputs,3,tf.nn.softmax)
-
-        '''
-        weights = {
-            'out': tf.Variable(tf.random_normal([self.nfeatures, 3], dtype=tf.float64),
-                               dtype=tf.float64)
-        }
-        biases = {
-            'out': tf.Variable(tf.random_normal([3], dtype=tf.float64), dtype=tf.float64)
-        }
-
-        result = tf.matmul(outputs, weights['out']) + biases['out']
-        result = tf.nn.softmax(result)
-        '''
+        nn_layer = tf.layers.dense(outputs,self.nfeatures/2,activation=None)
+        batch_normalized = self.insertBatchNNLayer(nn_layer, [0], [self.nfeatures/2])
+        batch_normalized = tf.nn.relu(batch_normalized)
+        result = tf.layers.dense(batch_normalized, 3, activation=tf.nn.softmax)
         print("final result11-->"+str(result))
 
-        # add softmax layer
         return result
 
     def optimizeWeights(self, pred):
@@ -168,13 +161,9 @@ class LSTMNet:
         # Parameters
 
         training_epochs = 5
-
         display_step = 1
-
         record_size = len(input1)
-
         labels = self.convertLabelsToOneHotVectors(labels)
-
 
 
         self.x1, self.y = self.prepareFeatures()
@@ -189,17 +178,12 @@ class LSTMNet:
 
 
         # Initializing the variables
-
-        saver = tf.train.Saver()
         optimizer, cost = self.optimizeWeights(self.pred)
-
         init = tf.global_variables_initializer()
 
         with tf.Session() as sess:
             sess.run(init)
-
             count = 0
-
             labels = np.reshape(labels, (-1, 3))
 
             # Training cycle
@@ -231,7 +215,7 @@ class LSTMNet:
 
     def validateModel(self, test_input1, test_labels, one_hot_encoding=False):
 
-
+        self.istraining = False
         test_labels = self.convertLabelsToOneHotVectors(test_labels)
 
         test_input1 = np.asarray(test_input1)
@@ -279,6 +263,7 @@ class LSTMNet:
 
     def predict(self, test_input1):
         # Test model
+        self.istraining = False
         result = []
         test_input1 = np.asarray(test_input1)
         record_size = len(test_input1)
