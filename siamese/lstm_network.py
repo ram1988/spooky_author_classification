@@ -21,7 +21,7 @@ class LSTMNet:
         self.embedding_matrix = embedding_matrix
         self.vocab_size = vocab_size
         self.threshold = 0.7
-        self.learning_rate = 0.1
+        self.learning_rate = 0.08
         self.epsilon = 1e-3
         self.istraining = True
 
@@ -130,9 +130,9 @@ class LSTMNet:
         print("output-->" + str(outputs))
 
         nn_layer1 = tf.layers.dense(outputs,1024,activation=tf.nn.relu)
-        nn_layer1 = tf.nn.dropout(nn_layer1,keep_prob=0.2)
+        nn_layer1 = tf.layers.dropout(nn_layer1,rate=0.8)
         nn_layer2 = tf.layers.dense(nn_layer1, 1024, activation=tf.nn.relu)
-        nn_layer2 = tf.nn.dropout(nn_layer2, keep_prob=0.2)
+        nn_layer2 = tf.layers.dropout(nn_layer2, rate=0.8)
         result = tf.layers.dense(nn_layer2, 3, activation=tf.nn.softmax)
 
         print("final result11-->"+str(result))
@@ -143,10 +143,10 @@ class LSTMNet:
         #cost = tf.reduce_mean(-tf.reduce_sum(self.y * tf.log(pred), reduction_indices=1))
         print("predicted-->"+str(pred))
         cost = tf.losses.log_loss(self.y, pred)
-        global_step = tf.Variable(0, trainable=False)
-        learning_rate = tf.train.exponential_decay(self.learning_rate, global_step,
-                                                   1000, 0.5, staircase=False)
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost, global_step=global_step)
+        #global_step = tf.Variable(0, trainable=False)
+        #learning_rate = tf.train.exponential_decay(self.learning_rate, global_step,
+        #                                           1000, 0.5, staircase=False)
+        optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(cost)
 
         return optimizer, cost
 
@@ -162,7 +162,7 @@ class LSTMNet:
     def trainModel(self, input1, labels, one_hot_encoding=False):
         # Parameters
 
-        training_epochs = 5
+        training_epochs = 10
         display_step = 1
         record_size = len(input1)
         labels = self.convertLabelsToOneHotVectors(labels)
